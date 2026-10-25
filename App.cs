@@ -22,7 +22,7 @@ internal sealed class BatteryApp(string[] args, SingleInstance instance) : Appli
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e); ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        DispatcherUnhandledException += (_, error) => { DebugConsole.Write(error.Exception.Message); error.Handled = true; Stop(); };
+        DispatcherUnhandledException += (_, error) => { DebugConsole.Write(error.Exception.ToString()); error.Handled = true; Stop(); };
         AppDomain.CurrentDomain.ProcessExit += (_, _) => _worker?.Dispose();
         Theme.Install(); SystemEvents.UserPreferenceChanged += PreferenceChanged;
         if (args.Contains("--debug")) { _debug = true; DebugConsole.Enable(); }
@@ -99,7 +99,13 @@ internal sealed class BatteryApp(string[] args, SingleInstance instance) : Appli
     {
         if (_stopping) return;
         if (!_settings.Configured) { OpenSettings(); return; }
-        _panel!.Update(_coordinator!); _panel.OpenNear(rect); if (refresh) _ = _coordinator!.RefreshAll();
+        try { _panel!.Update(_coordinator!); _panel.OpenNear(rect); if (refresh) _ = _coordinator!.RefreshAll(); }
+        catch (Exception ex)
+        {
+            DebugConsole.Write(ex.ToString());
+            MessageBox.Show("无法打开电量面板，程序仍在托盘运行。请重试或重新启动程序。\n" + ex.Message,
+                "面板打开失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
     void DevicesChanged() { if (_stopping) return; _deviceDebounce.Stop(); _deviceDebounce.Start(); }
     void PreferenceChanged(object sender, UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => { Theme.Refresh(); _tray?.Update(); });
