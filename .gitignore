@@ -1,0 +1,15 @@
+bin/
+obj/
+dist/
+tests/bin/
+tests/obj/
+.vs/
+*.user
+.research/
+settings.json
+battery-cache.json
+*.tmp
+*.suo
+Thumbs.db
+.DS_Store
+docs/PUBLISHING.md
