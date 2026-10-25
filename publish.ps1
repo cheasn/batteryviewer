@@ -15,6 +15,7 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'Windows tray registration self-test failed' }
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $publishFolder -Force
+Copy-Item -LiteralPath (Join-Path $projectRoot 'README.en.md') -Destination $publishFolder -Force
 Copy-Item -LiteralPath (Join-Path $projectRoot 'CHANGELOG.md') -Destination $publishFolder -Force
 $docsFolder = Join-Path $publishFolder 'docs'
 New-Item -ItemType Directory -Force -Path $docsFolder | Out-Null

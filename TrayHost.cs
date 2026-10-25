@@ -29,6 +29,7 @@ internal sealed class TrayHost : IDisposable
     int _retryCount;
     bool _disposed;
     bool _activityEnabled;
+    bool _showPending;
     public bool AllRegistered => _registered.Count == 2;
     public string RegistrationStatus => string.Join("；", new[] { DeviceKind.Mouse, DeviceKind.Keyboard }.Select(k => $"{_coordinator.State(k).Name}：{(_registered.Contains(k) ? "图标已注册" : "图标注册失败")}"));
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct NotifyData
@@ -133,16 +134,33 @@ internal sealed class TrayHost : IDisposable
         if (result >= 0 && r.Right > r.Left && r.Bottom > r.Top) { rect = new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top); return true; }
         rect = Rect.Empty; return false;
     }
+    void QueueShow(DeviceKind kind)
+    {
+        if (_showPending || _disposed) return;
+        _showPending = true;
+        // Explorer sends native callbacks synchronously. Let it finish before showing or
+        // activating a WPF window, and coalesce callbacks received while that window opens.
+        _source.Dispatcher.BeginInvoke(() =>
+        {
+            try { if (!_disposed) _show(kind, IconRect(kind)); }
+            finally { _showPending = false; }
+        });
+    }
     IntPtr Hook(IntPtr hwnd, int msg, IntPtr wp, IntPtr lp, ref bool handled)
     {
+        if (_disposed) return IntPtr.Zero;
         if ((uint)msg == _taskbarCreated) { _retry.Stop(); _registered.Clear(); Add(DeviceKind.Mouse); Add(DeviceKind.Keyboard); RetryMissing(); }
         if (msg == Callback || msg == Callback + 1)
         {
             int evt = (int)((long)lp & 0xffff);
             // Separate callback messages identify GUID icons without relying on version-specific uID packing.
             var kind = (DeviceKind)(msg - Callback);
-            if (evt is 0x400 or 0x401 || evt == 0x202 && !_version4.GetValueOrDefault(kind)) _ = _coordinator.Refresh(kind);
-            if (evt is 0x7b or 0x205) _show(kind, IconRect(kind));
+            bool version4 = _version4.GetValueOrDefault(kind);
+            if (evt is 0x400 or 0x401 || evt == 0x202 && !version4)
+                _source.Dispatcher.BeginInvoke(() => { if (!_disposed) _ = _coordinator.Refresh(kind); });
+            // Version 4 uses WM_CONTEXTMENU; legacy icons use WM_RBUTTONUP.
+            // Accepting both opens the panel twice for a single right-click.
+            if (version4 ? evt == 0x7b : evt == 0x205) QueueShow(kind);
             handled = true;
         }
         if (msg == 0x00ff && _activityEnabled) ObserveInput(lp);
